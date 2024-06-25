@@ -35,13 +35,13 @@ pub struct DecodeResult {
     pub decoded: ResolvedFunction,
     /// Multicall results if detected
     pub multicall_results: Option<Vec<crate::utils::MulticallDecoded>>,
-    _trace: TraceFactory,
+    // _trace: TraceFactory,
 }
 
 impl DecodeResult {
     /// Displays the decoded function signature and parameters in a formatted way
     pub fn display(&self) {
-        self._trace.display();
+        // self._trace.display();
     }
 
     /// Converts the decode result to JSON, including multicall results if present
@@ -402,12 +402,12 @@ pub async fn decode(mut args: DecodeArgs) -> Result<DecodeResult, Error> {
     debug!("decoding took {:?}", start_time.elapsed());
 
     // Create trace factory with multicall support
-    let mut trace = TraceFactory::try_from(&selected_match)?;
-    if let Some(ref multicall_results) = multicall_results {
+    // let mut trace = TraceFactory::try_from(&selected_match)?;
+    // if let Some(ref multicall_results) = multicall_results {
         // Add multicall results to trace
-        let decode_call = 1; // The main decode call is always index 1
-        format_multicall_trace(multicall_results, decode_call, &mut trace);
-    }
+        // let decode_call = 1; // The main decode call is always index 1
+        // format_multicall_trace(multicall_results, decode_call, &mut trace);
+    // }
 
-    Ok(DecodeResult { decoded: selected_match, multicall_results, _trace: trace })
+    Ok(DecodeResult { decoded: selected_match, multicall_results })
 }
