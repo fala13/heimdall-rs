@@ -152,6 +152,31 @@ pub trait ResolveSelector {
         Self: Sized;
 }
 
+use lazy_static::lazy_static;
+use std::io::BufRead as _;
+lazy_static! {
+    pub static ref SIG_MAP: std::collections::HashMap<String,Vec<String>> = {
+        let path = "/home/fala/crypto/whatsabi/export.csv";
+        load_data(path).expect("Failed to load data")
+    };
+}
+fn load_data(path: &str) -> std::io::Result<std::collections::HashMap<String, Vec<String>>> {
+    let file = std::fs::File::open(path)?;
+    let reader = std::io::BufReader::new(file);
+    let mut map = std::collections::HashMap::new();
+
+    for line in reader.lines() {
+        let line = line?;
+        let (key, value) = line.split_once(',').unwrap();
+        let key = key.split_at(2).1.to_string();
+        if key.len() > 8 { break; };
+        map.entry(key).or_insert_with(Vec::new).push(value.to_string());
+    }
+
+    Ok(map)
+}
+
+
 #[async_trait]
 impl ResolveSelector for ResolvedError {
     async fn resolve(selector: &str) -> Result<Option<Vec<Self>>> {
@@ -312,15 +337,56 @@ impl ResolveSelector for ResolvedFunction {
 
             trace!("resolving function selector {}", &selector);
 
+        // get cached results
+        if let Some(cached_results) =
+            heimdall_cache::read_cache:: <Vec<ResolvedFunction> >(&format!("selector.{selector}"))
+                .map_err(|e| eyre::eyre!(format!("error reading cache: {}", e)))?
+        {
+            match cached_results.len() {
+                0 => return Ok(None),
+                _ => {
+                    trace!("found cached results for selector: {}", &selector);
+                    return Ok(Some(cached_results));
+                }
+            }
+        }
+
+         let mut signature_list: Vec<ResolvedFunction> = Vec::new();
+        // get signatures from local map
+        if let Some(sigs) = SIG_MAP.get(selector) {
+            for text_signature in sigs {
+                // get the function text signature and unwrap it into a string
+                let text_signature = text_signature.to_string().replace('"', "");
+
+                // safely split the text signature into name and inputs
+                let function_parts = match text_signature.split_once('(') {
+                    Some(function_parts) => function_parts,
+                    None => continue,
+                };
+
+                signature_list.push(ResolvedFunction {
+                    name: function_parts.0.to_string(),
+                    signature: text_signature.to_string(),
+                    inputs: replace_last(function_parts.1, ")", "")
+                        .split(',')
+                        .map(|input| input.to_string())
+                        .collect(),
+                    decoded_inputs: None,
+                });
+            }
+        }
+        else
+        {
             // get function possibilities from openchain
             let signatures = match get_json_from_url(
                 &format!(
-                "https://api.openchain.xyz/signature-database/v1/lookup?filter=false&function=0x{}",
-                &selector
-            ),
+                    "https://api.openchain.xyz/signature-database/v1/lookup?filter=false&function=0x{}",
+                    &selector
+                ),
                 10,
             )
-            .await?
+            .await
+            .map_err(|e| eyre::eyre!(format!("error fetching signatures from openchain: {}", e)))?
             {
                 Some(signatures) => signatures,
                 None => return Ok(None),
@@ -333,11 +399,9 @@ impl ResolveSelector for ResolvedFunction {
                 .and_then(|function| function.get(format!("0x{selector}")))
                 .and_then(|item| item.as_array())
                 .map(|array| array.to_vec())
-                .ok_or_eyre("error parsing signatures from openchain")?;
+                .ok_or_else(|| eyre::eyre!("error parsing signatures from openchain"))?;
 
             trace!("found {} possible functions for selector: {}", &results.len(), &selector);
-
-            let mut signature_list: Vec<ResolvedFunction> = Vec::new();
 
             for signature in results {
                 // get the function text signature and unwrap it into a string
@@ -365,6 +429,7 @@ impl ResolveSelector for ResolvedFunction {
                     decoded_inputs: None,
                 });
             }
+        }
 
             Ok(match signature_list.len() {
                 0 => None,
@@ -558,6 +623,10 @@ mod tests {
     #[tokio::test]
     async fn resolve_function_signature_nominal() {
         let signature = String::from("095ea7b3");
+
+        let res = crate::ether::signatures::SIG_MAP.get(&signature); 
+        assert!(res.is_some());
+
         let _ = delete_cache(&format!("selector.{}", &signature));
         let result = ResolvedFunction::resolve(&signature)
             .await
