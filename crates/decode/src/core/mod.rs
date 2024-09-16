@@ -11,7 +11,7 @@ use heimdall_common::{
         },
         types::parse_function_parameters,
     },
-    utils::{io::logging::TraceFactory, strings::encode_hex},
+    utils::strings::encode_hex,
 };
 use heimdall_vm::core::types::{get_padding, get_potential_types_for_word, to_type, Padding};
 use tracing::{debug, info, trace, warn};
