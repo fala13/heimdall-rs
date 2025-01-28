@@ -76,6 +76,11 @@ async fn main() -> Result<()> {
                 cmd.rpc_url = configuration.rpc_url;
             }
 
+            // if the user has not specified a openai api key, use the default
+            if cmd.openai_api_key.as_str() == "" {
+                cmd.openai_api_key = configuration.openai_api_key;
+            }
+
             // if the user has passed an output filename, override the default filename
             let mut abi_filename: String = "abi.json".to_string();
             let mut decompiled_output_filename: String = "decompiled".to_string();
@@ -155,12 +160,21 @@ async fn main() -> Result<()> {
             }
 
             let result =
-                decode(cmd).await.map_err(|e| eyre!("failed to decode calldata: {}", e))?;
+                decode(cmd.clone()).await.map_err(|e| eyre!("failed to decode calldata: {}", e))?;
 
-            result.display()
+            if cmd.output == "print" {
+                result.display()
+            } else {
+                let output_path =
+                    build_output_path(&cmd.output, &cmd.target, &cmd.rpc_url, "decoded.json")
+                        .await
+                        .map_err(|e| eyre!("failed to build output path: {}", e))?;
+                write_file(&output_path, &result.decoded.to_json()?)
+                    .map_err(|e| eyre!("failed to write decoded output: {}", e))?;
+            }
         }
 
-        Subcommands::CFG(mut cmd) => {
+        Subcommands::Cfg(mut cmd) => {
             // if the user has not specified a rpc url, use the default
             if cmd.rpc_url.as_str() == "" {
                 cmd.rpc_url = configuration.rpc_url;
