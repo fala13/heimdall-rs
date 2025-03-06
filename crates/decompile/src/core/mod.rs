@@ -39,8 +39,14 @@ use crate::{
 use tracing::{debug, info, warn};
 
 #[derive(Debug, Clone)]
+/// Result of a successful decompile operation
+///
+/// Contains the decompiled source code (if requested) and the reconstructed ABI
+/// of the contract.
 pub struct DecompileResult {
+    /// The decompiled source code in Solidity or Yul format (if requested)
     pub source: Option<String>,
+    /// The reconstructed JSON ABI of the contract
     pub abi: JsonAbi,
 }
 
@@ -74,6 +80,19 @@ pub async fn get_proxy(
     }
 }
 
+/// Decompiles EVM bytecode into higher-level Solidity-like code
+///
+/// This function analyzes the bytecode of a contract through symbolic execution
+/// and attempts to reconstruct the original source code or a functionally equivalent
+/// representation. It also generates an ABI for the contract.
+///
+/// # Arguments
+///
+/// * `args` - Configuration parameters for the decompile operation
+///
+/// # Returns
+///
+/// A DecompileResult containing the decompiled source (if requested) and the ABI
 pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
     return decompile_impl(args, "").await;
 }

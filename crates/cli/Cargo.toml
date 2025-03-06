@@ -29,6 +29,10 @@ alloy-json-abi = "0.8.3"
 alloy = { version = "0.4.2", features = ["full", "rpc-types-debug", "rpc-types-trace"] }
 async-trait = "0.1.51"
 
+[lints]
+workspace = true
+
+
 [[bin]]
 name = "heimdall"
 path = "src/main.rs"

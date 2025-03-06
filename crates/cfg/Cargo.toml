@@ -10,6 +10,9 @@ repository.workspace = true
 keywords.workspace = true
 exclude.workspace = true
 
+[lints]
+workspace = true
+
 [lib]
 bench = false
 
@@ -29,3 +32,6 @@ alloy = { version = "0.4.2", features = ["full", "rpc-types-debug", "rpc-types-t
 
 heimdall-disassembler.workspace = true
 heimdall-vm.workspace = true
+
+[dev-dependencies]
+tokio = { version = "1", features = ["full"] }

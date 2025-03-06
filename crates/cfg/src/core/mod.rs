@@ -4,6 +4,7 @@ use alloy::primitives::Address;
 use eyre::eyre;
 use heimdall_common::{ether::compiler::detect_compiler, utils::strings::StringExt};
 use heimdall_vm::core::vm::VM;
+use std::collections::HashSet;
 
 use petgraph::{dot::Dot, Graph};
 use std::time::{Duration, Instant};
@@ -13,12 +14,15 @@ use super::CfgArgs;
 use crate::{core::graph::build_cfg, error::Error};
 use tracing::{debug, info};
 
+/// The result of the cfg command. Contains the generated control flow graph.
 #[derive(Debug, Clone)]
 pub struct CfgResult {
+    /// The generated control flow graph of the contract.
     pub graph: Graph<String, String>,
 }
 
 impl CfgResult {
+    /// Returns the control flow graph as a graphviz formatted string.
     pub fn as_dot(&self, color_edges: bool) -> String {
         let output = format!("{}", Dot::with_config(&self.graph, &[]));
 
@@ -44,6 +48,7 @@ impl CfgResult {
     }
 }
 
+/// Generates a control flow graph for the target contract.
 pub async fn cfg(args: CfgArgs) -> Result<CfgResult, Error> {
     // init
     let start_time = Instant::now();
@@ -93,7 +98,8 @@ pub async fn cfg(args: CfgArgs) -> Result<CfgResult, Error> {
     let start_cfg_time = Instant::now();
     info!("building cfg for '{}' from symbolic execution trace", args.target.truncate(64));
     let mut contract_cfg = Graph::new();
-    build_cfg(&map, &mut contract_cfg, None, false)?;
+    let mut seen_nodes: HashSet<String> = HashSet::new();
+    build_cfg(&map, &mut contract_cfg, None, false, &mut seen_nodes)?;
     debug!("building cfg took {:?}", start_cfg_time.elapsed());
 
     debug!("cfg generated in {:?}", start_time.elapsed());
