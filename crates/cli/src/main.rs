@@ -1,4 +1,6 @@
 //! The Heimdall CLI is a command line interface for interacting with Heimdall modules.
+#[global_allocator]
+static GLOBAL: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
 pub(crate) mod args;
 pub(crate) mod output;
