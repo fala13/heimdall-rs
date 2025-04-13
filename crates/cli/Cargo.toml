@@ -28,6 +28,7 @@ eyre.workspace = true
 alloy-json-abi.workspace = true
 alloy.workspace = true
 async-trait.workspace = true
+jemallocator = "0.5.4"
 
 [lints]
 workspace = true
