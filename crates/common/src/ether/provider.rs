@@ -71,7 +71,7 @@ impl MultiTransportProvider {
         block_number: u64,
         trace_type: &[TraceType],
     ) -> Result<Vec<TraceResultsWithTransactionHash>> {
-        let block_number = block_number.into();
+        // let block_number = block_number.into();
 
         let trace_builder = self.provider.trace_replay_block_transactions(block_number);
         let trace_results = trace_builder.trace_types(trace_type.to_vec()).trace().await?;

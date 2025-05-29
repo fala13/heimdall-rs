@@ -1,21 +1,22 @@
 //! Module for fetching calldata from a target.
 use super::rpc::get_transaction;
+use alloy::consensus::Transaction;
 use crate::utils::strings::decode_hex;
 use alloy::{consensus::Transaction, primitives::TxHash};
 use eyre::{bail, eyre, Result};
 /// Given a target, return calldata of the target.
 pub async fn get_calldata_from_target(target: &str, raw: bool, rpc_url: &str) -> Result<Vec<u8>> {
     // If the target is a transaction hash, fetch the calldata from the RPC provider.
-    // if let Ok(address) = target.parse::<TxHash>() {
-    //     // if raw is true, the user specified that the target is raw calldata. skip fetching the
-    //     // transaction.
-    //     if !raw {
-    //         return get_transaction(address, rpc_url)
-    //             .await
-    //             .map(|tx| tx.inner.input().to_vec())
-    //             .map_err(|_| eyre!("failed to fetch transaction from RPC provider"));
-    //     }
-    // }
+    if let Ok(address) = target.parse::<TxHash>() {
+        // if raw is true, the user specified that the target is raw calldata. skip fetching the
+        // transaction.
+        if !raw {
+            return get_transaction(address, rpc_url)
+                .await
+                .map(|tx| tx.inner.input().to_vec())
+                .map_err(|_| eyre!("failed to fetch transaction from RPC provider"));
+        }
+    }
 
     // If the target is not a transaction hash, it could be calldata.
     if let Ok(calldata) = decode_hex(target) {
