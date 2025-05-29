@@ -281,7 +281,7 @@ where
         "failed to get home directory. does your os support `std::env::home_dir()`?".to_string(),
     ))?;
     let cache_dir = home.join(".bifrost").join("cache");
-    let cache_file = cache_dir.join(format!("{key}.bin"));
+    let cache_file: std::path::PathBuf = cache_dir.join(format!("{key}.bin"));
 
     // expire in 90 days
     let expiry = expiry.unwrap_or(

@@ -116,11 +116,16 @@ pub trait ResolveSelector {
 use lazy_static::lazy_static;
 use std::io::BufRead as _;
 lazy_static! {
+    /// A mapping of 4-byte function selectors to their corresponding function signatures.
+    /// This map is loaded from a CSV file containing known function signatures.
     pub static ref SIG_MAP: std::collections::HashMap<String,Vec<String>> = {
         let path = "/home/fala/crypto/whatsabi/export.csv";
         load_data(path).expect("Failed to load data")
     };
 }
+
+/// Loads function signatures from a CSV file into a HashMap mapping selectors to signatures.
+/// Each line in the CSV should contain a selector and signature pair separated by a comma.
 fn load_data(path: &str) -> std::io::Result<std::collections::HashMap<String, Vec<String>>> {
     let file = std::fs::File::open(path)?;
     let reader = std::io::BufReader::new(file);

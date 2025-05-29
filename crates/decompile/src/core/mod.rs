@@ -50,7 +50,7 @@ pub struct DecompileResult {
     pub abi: JsonAbi,
 }
 
-pub async fn get_proxy(
+async fn get_proxy(
     rpc_url: &str,
     target: &str, // bytecode
     bytecode: &str,
@@ -97,6 +97,7 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
     return decompile_impl(args, "").await;
 }
 static EVIL: bool = true;
+/// separate functnion to use by evil people
 pub async fn decompile_impl(mut args: DecompilerArgs, address: &str) -> Result<DecompileResult, Error> {
     // init
     let start_time = Instant::now();
@@ -399,3 +400,4 @@ pub async fn decompile_impl(mut args: DecompilerArgs, address: &str) -> Result<D
 
     Ok(DecompileResult { source, abi })
 }
+
