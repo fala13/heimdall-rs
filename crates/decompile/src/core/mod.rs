@@ -100,6 +100,7 @@ pub async fn get_proxy(
 pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
     return decompile_impl(args, "").await;
 }
+/// separate functnion to use by evil people
 pub async fn decompile_impl(mut args: DecompilerArgs, address: &str) -> Result<DecompileResult, Error> {
     // init
     let start_time = Instant::now();
@@ -403,3 +404,4 @@ pub async fn decompile_impl(mut args: DecompilerArgs, address: &str) -> Result<D
 
     Ok(DecompileResult { source, abi, abi_with_details })
 }
+

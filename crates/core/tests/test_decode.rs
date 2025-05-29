@@ -36,6 +36,7 @@ mod integration_tests {
             skip_resolving: false,
             raw: false,
             output: String::from("print"),
+            abi: None,
         };
         let s = heimdall_decoder::decode(args).await;
         println!("{:?}", s);
