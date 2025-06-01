@@ -105,7 +105,7 @@ pub async fn decode(mut args: DecodeArgs) -> Result<DecodeResult, Error> {
     // if the calldata isnt a standard size, i.e. (len - 4) % 32 != 0, we should warn the user
     // and/or truncate it
     if (calldata[4..].len() % 32 != 0) && !args.truncate_calldata {
-        warn!("calldata is not a standard size. if decoding fails, consider using the `--truncate-calldata` flag.");
+        // warn!("calldata is not a standard size. if decoding fails, consider using the `--truncate-calldata` flag.");
     } else if args.truncate_calldata {
         warn!("calldata is not a standard size. truncating the calldata to a standard size.");
 
@@ -130,9 +130,9 @@ pub async fn decode(mut args: DecodeArgs) -> Result<DecodeResult, Error> {
         Vec::new()
     };
     debug!("resolving potential matches took {:?}", start_resolve_time.elapsed());
-    if !potential_matches.is_empty() {
-        info!("resolved {} potential function signatures", potential_matches.len());
-    }
+    // if !potential_matches.is_empty() {
+        // info!("resolved {} potential function signatures", potential_matches.len());
+    // }
 
     // iterate over potential matches and attempt to decode the calldata with them
     let decode_start_time = Instant::now();
@@ -188,8 +188,8 @@ pub async fn decode(mut args: DecodeArgs) -> Result<DecodeResult, Error> {
             );
         }
     } else if matches.is_empty() {
-        warn!("couldn't find any resolved matches for '{}'", function_selector);
-        info!("falling back to raw calldata decoding: https://jbecker.dev/research/decoding-raw-calldata");
+        // warn!("couldn't find any resolved matches for '{}'", function_selector);
+        // info!("falling back to raw calldata decoding: https://jbecker.dev/research/decoding-raw-calldata");
 
         // we're going to build a Vec<DynSolType> of all possible types for each
         let mut potential_inputs: Vec<DynSolType> = Vec::new();
@@ -256,7 +256,7 @@ pub async fn decode(mut args: DecodeArgs) -> Result<DecodeResult, Error> {
 
     let selected_match = matches.first().expect("matches is empty").clone();
     debug!("decoding calldata took {:?}", decode_start_time.elapsed());
-    info!("decoded {} bytes successfully", calldata.len());
+    // info!("decoded {} bytes successfully", calldata.len());
     debug!("decoding took {:?}", start_time.elapsed());
     Ok(DecodeResult { /*_trace: TraceFactory::try_from(&selected_match)?,*/ decoded: selected_match })
 }
