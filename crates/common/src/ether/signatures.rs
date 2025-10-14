@@ -410,10 +410,7 @@ impl ResolveSelector for ResolvedFunction {
 
             for signature in results {
                 // get the function text signature and unwrap it into a string
-                let text_signature = match signature.get("name") {
-                    Some(text_signature) => text_signature.to_string().replace('"', ""),
-                    None => continue,
-                };
+                let text_signature = text_signature.to_string().replace('"', "");
 
                 // safely split the text signature into name and inputs
                 let function_parts = match text_signature.split_once('(') {
@@ -421,16 +418,13 @@ impl ResolveSelector for ResolvedFunction {
                     None => continue,
                 };
 
-                // Parse the inputs using parse_function_parameters
-                let parsed_inputs = match parse_function_parameters(&text_signature) {
-                    Ok(inputs) => inputs,
-                    Err(_) => continue,
-                };
-
                 signature_list.push(ResolvedFunction {
                     name: function_parts.0.to_string(),
                     signature: text_signature.to_string(),
-                    inputs: dyn_sol_types_to_strings(&parsed_inputs),
+                    inputs: replace_last(function_parts.1, ")", "")
+                        .split(',')
+                        .map(|input| input.to_string())
+                        .collect(),
                     decoded_inputs: None,
                 });
             }
