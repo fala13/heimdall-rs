@@ -11,7 +11,7 @@ use crate::{
     ether::types::{dyn_sol_types_to_strings, inputs_to_abi_format, parse_function_parameters},
     utils::{
         http::get_json_from_url,
-        io::{logging::TraceFactory, types::display},
+        io::{logging::TraceFactory, types::display}, strings::replace_last,
     },
 };
 use eyre::{OptionExt, Result};
@@ -408,7 +408,7 @@ impl ResolveSelector for ResolvedFunction {
 
             trace!("found {} possible functions for selector: {}", &results.len(), &selector);
 
-            for signature in results {
+            for text_signature in results {
                 // get the function text signature and unwrap it into a string
                 let text_signature = text_signature.to_string().replace('"', "");
 

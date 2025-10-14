@@ -19,13 +19,13 @@ pub struct DecodeResult {
     pub decoded: ResolvedFunction,
     /// Multicall results if detected
     pub multicall_results: Option<Vec<crate::utils::MulticallDecoded>>,
-    pub(crate) _trace: TraceFactory,
+    // pub(crate) _trace: TraceFactory,
 }
 
 impl DecodeResult {
     /// Displays the decoded function signature and parameters in a formatted way
     pub fn display(&self) {
-        self._trace.display();
+        // self._trace.display();
     }
 
     /// Converts the decode result to JSON, including multicall results if present
