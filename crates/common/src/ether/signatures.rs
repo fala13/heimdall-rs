@@ -20,7 +20,7 @@ use serde::{
     ser::{SerializeMap, Serializer},
     Deserialize, Serialize,
 };
-use tracing::{debug, trace};
+use tracing::{debug, trace, warn};
 
 use super::types::DynSolValueExt;
 
@@ -342,20 +342,6 @@ impl ResolveSelector for ResolvedFunction {
 
             trace!("resolving function selector {}", &selector);
 
-        // get cached results
-        if let Some(cached_results) =
-            heimdall_cache::read_cache:: <Vec<ResolvedFunction> >(&format!("selector.{selector}"))
-                .map_err(|e| eyre::eyre!(format!("error reading cache: {}", e)))?
-        {
-            match cached_results.len() {
-                0 => return Ok(None),
-                _ => {
-                    trace!("found cached results for selector: {}", &selector);
-                    return Ok(Some(cached_results));
-                }
-            }
-        }
-
          let mut signature_list: Vec<ResolvedFunction> = Vec::new();
         // get signatures from local map
         if let Some(sigs) = SIG_MAP.get(selector) {
@@ -382,6 +368,7 @@ impl ResolveSelector for ResolvedFunction {
         }
         else
         {
+            warn!("somethins awrly.. getting signatures from openchain");
             // get function possibilities from openchain
             let signatures = match get_json_from_url(
                 &format!(
@@ -408,9 +395,12 @@ impl ResolveSelector for ResolvedFunction {
 
             trace!("found {} possible functions for selector: {}", &results.len(), &selector);
 
-            for text_signature in results {
+            for signature in results {
                 // get the function text signature and unwrap it into a string
-                let text_signature = text_signature.to_string().replace('"', "");
+                let text_signature = match signature.get("name") {
+                    Some(text_signature) => text_signature.to_string().replace('"', ""),
+                    None => continue,
+                };
 
                 // safely split the text signature into name and inputs
                 let function_parts = match text_signature.split_once('(') {
