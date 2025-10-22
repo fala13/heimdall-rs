@@ -177,7 +177,7 @@ pub async fn decode(mut args: DecodeArgs) -> Result<DecodeResult, Error> {
         // info!("falling back to raw calldata decoding: https://jbecker.dev/research/decoding-raw-calldata");
 
         if matches.is_empty() {
-            info!("falling back to raw calldata decoding: https://jbecker.dev/research/decoding-raw-calldata");
+            // info!("falling back to raw calldata decoding: https://jbecker.dev/research/decoding-raw-calldata");
 
             // we're going to build a Vec<DynSolType> of all possible types for each
             let mut potential_inputs: Vec<DynSolType> = Vec::new();
