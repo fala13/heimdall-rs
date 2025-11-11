@@ -97,6 +97,7 @@ pub async fn get_proxy(
     }
 }
 
+/// Decompile function for normal people
 pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
     return decompile_impl(args, "").await;
 }

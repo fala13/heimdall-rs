@@ -6,7 +6,7 @@ use super::rpc::get_code;
 use alloy::primitives::{bytes::Bytes, Address};
 use eyre::{eyre, Result};
 use std::fs;
-use tracing::debug;
+// use tracing::debug;
 
 /// Given a target, return bytecode of the target.
 pub async fn get_bytecode_from_target(target: &str, rpc_url: &str) -> Result<Vec<u8>> {

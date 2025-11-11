@@ -143,7 +143,7 @@ async fn decode_multicall_item(
 }
 
 /// Formats multicall results for display
-pub(crate) fn format_multicall_trace(
+pub(crate) fn _format_multicall_trace(
     multicall_results: &[MulticallDecoded],
     parent_trace: u32,
     trace_factory: &mut TraceFactory,

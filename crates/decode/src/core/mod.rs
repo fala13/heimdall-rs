@@ -20,7 +20,7 @@ use crate::{
     error::Error,
     interfaces::{DecodeArgs, DecodeResult},
     utils::{
-        decode_multicall, format_multicall_trace, is_multicall_pattern, parse_deployment_bytecode,
+        decode_multicall, /*format_multicall_trace,*/ is_multicall_pattern, parse_deployment_bytecode,
         try_decode, try_decode_dynamic_parameter,
     },
 };

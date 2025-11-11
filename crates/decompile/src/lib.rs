@@ -13,6 +13,6 @@ mod interfaces;
 mod utils;
 
 // re-export the public interface
-pub use core::{decompile, decompile_impl, DecompileResult};
+pub use core::{decompile, decompile_impl, get_proxy, DecompileResult};
 pub use error::Error;
 pub use interfaces::{DecompilerArgs, DecompilerArgsBuilder};

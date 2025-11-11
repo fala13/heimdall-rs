@@ -3,7 +3,7 @@
 use crate::ether::provider::MultiTransportProvider;
 use alloy::{
     eips::BlockNumberOrTag,
-    network::TransactionResponse,
+    // network::TransactionResponse,
     primitives::{Address, TxHash},
     rpc::types::{
         trace::parity::{TraceResults, TraceResultsWithTransactionHash, TraceType},
@@ -182,7 +182,7 @@ pub mod tests {
 
     #[tokio::test]
     async fn test_chain_id_56() {
-        let rpc_url = std::env::var("RPC_URL").unwrap_or_else(|_| {
+        let _rpc_url = std::env::var("RPC_URL").unwrap_or_else(|_| {
             println!("RPC_URL not set, skipping test");
             std::process::exit(0);
         });

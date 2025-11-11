@@ -10,12 +10,11 @@ use clap::Parser;
 use eyre::{eyre, Result};
 use heimdall_cache::cache;
 use output::{build_output_path, print_with_less};
-use tracing::info;
 
 use heimdall_common::utils::{
     hex::ToLowerHex,
     io::file::write_file,
-    version::{current_version, remote_nightly_version, remote_version},
+   // version::{current_version, remote_nightly_version, remote_version},
 };
 use heimdall_config::{config, Configuration};
 use heimdall_core::{

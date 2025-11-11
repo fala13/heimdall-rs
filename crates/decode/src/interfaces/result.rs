@@ -3,7 +3,7 @@ use heimdall_common::{
         signatures::ResolvedFunction,
         types::{parse_function_parameters, to_abi_string, to_components, DynSolValueExt},
     },
-    utils::{io::logging::TraceFactory, strings::encode_hex},
+    utils::strings::encode_hex,
 };
 use serde_json::json;
 
