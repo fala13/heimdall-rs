@@ -368,57 +368,57 @@ impl ResolveSelector for ResolvedFunction {
         }
         else
         {
-            warn!("somethins awrly.. getting signatures from openchain");
-            // get function possibilities from openchain
-            let signatures = match get_json_from_url(
-                &format!(
-                    "https://api.openchain.xyz/signature-database/v1/lookup?filter=false&function=0x{}",
-                    &selector
-                ),
-                10,
-            )
-            .await
-            .map_err(|e| eyre::eyre!(format!("error fetching signatures from openchain: {}", e)))?
-            {
-                Some(signatures) => signatures,
-                None => return Ok(None),
-            };
-
-            // convert the serde value into a vec of possible functions
-            let results = signatures
-                .get("result")
-                .and_then(|result| result.get("function"))
-                .and_then(|function| function.get(format!("0x{selector}")))
-                .and_then(|item| item.as_array())
-                .map(|array| array.to_vec())
-                .ok_or_else(|| eyre::eyre!("error parsing signatures from openchain"))?;
-
-            trace!("found {} possible functions for selector: {}", &results.len(), &selector);
-
-            for signature in results {
-                // get the function text signature and unwrap it into a string
-                let text_signature = match signature.get("name") {
-                    Some(text_signature) => text_signature.to_string().replace('"', ""),
-                    None => continue,
-                };
-
-                // safely split the text signature into name and inputs
-                let function_parts = match text_signature.split_once('(') {
-                    Some(function_parts) => function_parts,
-                    None => continue,
-                };
-
-                signature_list.push(ResolvedFunction {
-                    name: function_parts.0.to_string(),
-                    signature: text_signature.to_string(),
-                    inputs: replace_last(function_parts.1, ")", "")
-                        .split(',')
-                        .map(|input| input.to_string())
-                        .collect(),
-                    decoded_inputs: None,
-                });
-            }
+            warn!("signature not found in SIG_MAP: {}, map length: {}", &selector, SIG_MAP.len());
+            return Ok(None);
         }
+            // // get function possibilities from openchain
+            // let signatures = match get_json_from_url(
+            //     &format!(
+            //         "https://api.openchain.xyz/signature-database/v1/lookup?filter=false&function=0x{}",
+            //         &selector
+            //     ),
+            //     10,
+            // )
+            // .await
+            // .map_err(|e| eyre::eyre!(format!("error fetching signatures from openchain: {}", e)))?
+            // {
+            //     Some(signatures) => signatures,
+            //     None => return Ok(None),
+            // };
+
+            // // convert the serde value into a vec of possible functions
+            // let results = signatures
+            //     .get("result")
+            //     .and_then(|result| result.get("function"))
+            //     .and_then(|function| function.get(format!("0x{selector}")))
+            //     .and_then(|item| item.as_array())
+            //     .map(|array| array.to_vec())
+            //     .ok_or_else(|| eyre::eyre!("error parsing signatures from openchain"))?;
+
+            // trace!("found {} possible functions for selector: {}", &results.len(), &selector);
+
+            // for signature in results {
+            //     // get the function text signature and unwrap it into a string
+            //     let text_signature = match signature.get("name") {
+            //         Some(text_signature) => text_signature.to_string().replace('"', ""),
+            //         None => continue,
+            //     };
+
+            //     // safely split the text signature into name and inputs
+            //     let function_parts = match text_signature.split_once('(') {
+            //         Some(function_parts) => function_parts,
+            //         None => continue,
+            //     };
+
+            //     signature_list.push(ResolvedFunction {
+            //         name: function_parts.0.to_string(),
+            //         signature: text_signature.to_string(),
+            //         inputs: replace_last(function_parts.1, ")", "")
+            //             .split(',')
+            //             .map(|input| input.to_string())
+            //             .collect(),
+            //         decoded_inputs: None,
+            //     });
 
             Ok(match signature_list.len() {
                 0 => None,
@@ -603,8 +603,7 @@ mod tests {
 
     use crate::ether::{
         signatures::{
-            dyn_sol_types_to_strings, score_signature, ResolveSelector, ResolvedError,
-            ResolvedFunction, ResolvedLog,
+            ResolveSelector, ResolvedError, ResolvedFunction, ResolvedLog, dyn_sol_types_to_strings, score_signature
         },
         types::parse_function_parameters,
     };
