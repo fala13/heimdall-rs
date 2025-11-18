@@ -527,12 +527,19 @@ pub fn score_signature(signature: &str, num_words: Option<usize>) -> u32 {
         let num_dyn_params = signature.matches("bytes").count() +
             signature.matches("string").count() +
             signature.matches('[').count();
-        let num_static_params = num_params - num_dyn_params;
+        
+        let num_static_params = if num_dyn_params < num_params { num_params - num_dyn_params } else { 0 };
 
         // reduce the score if the signature has less static parameters than there are words in the
         // calldata
         if num_static_params < num_words {
-            score -= (num_words - num_static_params) as u32 * 10;
+            let penalty = (num_words - num_static_params) as u32 * 10;
+            if penalty > score {
+                score = 0;
+            }
+            else {
+                score -= penalty;
+            }
         }
     }
 
