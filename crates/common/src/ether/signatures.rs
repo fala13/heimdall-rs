@@ -11,7 +11,7 @@ use crate::{
     ether::types::{dyn_sol_types_to_strings, inputs_to_abi_format, parse_function_parameters},
     utils::{
         http::get_json_from_url,
-        io::{logging::TraceFactory, types::display}, strings::replace_last,
+        io::{logging::TraceFactory, types::display},
     },
 };
 use eyre::{OptionExt, Result};
@@ -340,12 +340,15 @@ impl ResolveSelector for ResolvedFunction {
                 None => selector,
             };
 
+            // tracing::info!("resolving function selector {}", &selector);
             trace!("resolving function selector {}", &selector);
 
-         let mut signature_list: Vec<ResolvedFunction> = Vec::new();
+        let mut signature_list: Vec<ResolvedFunction> = Vec::new();
         // get signatures from local map
         if let Some(sigs) = SIG_MAP.get(selector) {
+            // tracing::info!("sigs: {:?}", sigs);
             for text_signature in sigs {
+                // tracing::info!("text_signature: {:?}", text_signature);
                 // get the function text signature and unwrap it into a string
                 let text_signature = text_signature.to_string().replace('"', "");
 
@@ -355,19 +358,26 @@ impl ResolveSelector for ResolvedFunction {
                     None => continue,
                 };
 
+                // Parse the inputs using parse_function_parameters
+                let parsed_inputs = match parse_function_parameters(&text_signature) {
+                    Ok(inputs) => inputs,
+                    Err(e) => {
+                        tracing::warn!("failed to parse function parameters for {}: {:?}", text_signature, e);
+                        continue;
+                    }
+                };
+
                 signature_list.push(ResolvedFunction {
                     name: function_parts.0.to_string(),
                     signature: text_signature.to_string(),
-                    inputs: replace_last(function_parts.1, ")", "")
-                        .split(',')
-                        .map(|input| input.to_string())
-                        .collect(),
+                    inputs: dyn_sol_types_to_strings(&parsed_inputs),
                     decoded_inputs: None,
                 });
             }
         }
         else
         {
+            // tracing::warn!("signature not found in SIG_MAP: {}, map length: {}", &selector, SIG_MAP.len());
             warn!("signature not found in SIG_MAP: {}, map length: {}", &selector, SIG_MAP.len());
             return Ok(None);
         }
