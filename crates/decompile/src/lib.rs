@@ -1,3 +1,4 @@
+#![recursion_limit = "256"]
 //! The Decompile module provides functionality to convert EVM bytecode
 //! into higher-level Solidity-like code.
 //!

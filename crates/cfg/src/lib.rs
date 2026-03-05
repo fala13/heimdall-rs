@@ -1,3 +1,4 @@
+#![recursion_limit = "256"]
 //! The CFG module is responsible for generating control-flow graphs from the given
 //! contract's source code via symbolic execution.
 
