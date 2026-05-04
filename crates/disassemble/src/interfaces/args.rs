@@ -1,7 +1,9 @@
+use alloy::primitives::Address;
 use clap::Parser;
 use eyre::Result;
 use heimdall_common::ether::bytecode::get_bytecode_from_target;
 use heimdall_config::parse_url_arg;
+use heimdall_vm::core::hardfork::HardFork;
 
 #[derive(Debug, Clone, Parser)]
 #[clap(
@@ -34,6 +36,16 @@ pub struct DisassemblerArgs {
     /// The output directory to write the output to or 'print' to print to the console
     #[clap(long = "output", short = 'o', default_value = "output", hide_default_value = true)]
     pub output: String,
+
+    /// The hardfork to use for opcode recognition. Opcodes introduced after this hardfork
+    /// will be shown as 'unknown'. Defaults to 'latest'.
+    #[clap(long, short = 'f', default_value = "latest")]
+    pub hardfork: HardFork,
+
+    /// Etherscan API key for fetching contract creation block.
+    /// If provided, uses Etherscan API instead of binary search.
+    #[clap(long, short = 'e', default_value = "", hide_default_value = true)]
+    pub etherscan_api_key: String,
 }
 
 #[derive(Debug, Clone)]
@@ -56,6 +68,12 @@ pub struct DisassemblerArgsBuilder {
 
     /// The output directory to write the output to or 'print' to print to the console
     output: Option<String>,
+
+    /// The hardfork to use for opcode recognition.
+    hardfork: Option<HardFork>,
+
+    /// Etherscan API key for fetching contract creation block.
+    etherscan_api_key: Option<String>,
 }
 
 impl DisassemblerArgs {
@@ -68,6 +86,74 @@ impl DisassemblerArgs {
     /// The raw bytecode as a vector of bytes
     pub async fn get_bytecode(&self) -> Result<Vec<u8>> {
         get_bytecode_from_target(&self.target, &self.rpc_url, "").await
+    }
+
+    /// Gets the hardfork to use for disassembly.
+    ///
+    /// If `hardfork` is set to `Auto`, attempts to detect the hardfork based on the
+    /// contract's creation block. If detection fails, falls back to `Latest`.
+    ///
+    /// If `etherscan_api_key` is provided and the chain is supported, uses Etherscan API
+    /// for faster creation block lookup. Otherwise, uses binary search via RPC.
+    pub async fn get_hardfork(&self) -> HardFork {
+        if self.hardfork != HardFork::Auto {
+            return self.hardfork;
+        }
+
+        // Try to auto-detect hardfork from creation block
+        match self.detect_hardfork_from_creation_block().await {
+            Some(fork) => fork,
+            None => HardFork::Latest,
+        }
+    }
+
+    /// Attempts to detect the hardfork based on the contract's creation block.
+    ///
+    /// Returns `None` if the target is not a contract address, no RPC URL is available,
+    /// or the creation block cannot be determined.
+    async fn detect_hardfork_from_creation_block(&self) -> Option<HardFork> {
+        // Need RPC URL to get chain_id and creation block
+        if self.rpc_url.is_empty() {
+            return None;
+        }
+
+        // Try to parse target as an address
+        let address: Address = self.target.parse().ok()?;
+
+        // Get the chain_id first (needed for both etherscan and hardfork detection)
+        let chain_id = heimdall_common::ether::rpc::chain_id(&self.rpc_url).await.ok()?;
+
+        // Try to get the creation block
+        let creation_block = self.get_creation_block(address, chain_id).await?;
+
+        // Determine hardfork from chain and block number
+        // Note: For post-merge forks we don't have timestamp, so this will return Paris
+        // for post-merge blocks. This is conservative and safe for opcode recognition.
+        Some(HardFork::from_chain(chain_id, creation_block, None))
+    }
+
+    /// Gets the creation block for a contract address.
+    ///
+    /// Uses Etherscan API if available and supported, otherwise falls back to binary search.
+    async fn get_creation_block(&self, address: Address, chain_id: u64) -> Option<u64> {
+        // If etherscan_api_key is provided and chain is supported, use Etherscan API
+        if !self.etherscan_api_key.is_empty() &&
+            heimdall_common::ether::etherscan::is_supported_chain(chain_id)
+        {
+            if let Ok(block) = heimdall_common::ether::etherscan::get_contract_creation_block(
+                address,
+                &self.rpc_url,
+                chain_id,
+                &self.etherscan_api_key,
+            )
+            .await
+            {
+                return Some(block);
+            }
+        }
+
+        // Fall back to binary search
+        heimdall_common::ether::rpc::get_contract_creation_block(address, &self.rpc_url).await.ok()
     }
 }
 
@@ -86,6 +172,8 @@ impl DisassemblerArgsBuilder {
             decimal_counter: Some(false),
             name: Some(String::new()),
             output: Some(String::new()),
+            hardfork: Some(HardFork::Latest),
+            etherscan_api_key: Some(String::new()),
         }
     }
 
@@ -119,6 +207,18 @@ impl DisassemblerArgsBuilder {
         self
     }
 
+    /// Sets the hardfork for opcode recognition
+    pub fn hardfork(&mut self, hardfork: HardFork) -> &mut Self {
+        self.hardfork = Some(hardfork);
+        self
+    }
+
+    /// Sets the Etherscan API key for fetching contract creation block
+    pub fn etherscan_api_key(&mut self, etherscan_api_key: String) -> &mut Self {
+        self.etherscan_api_key = Some(etherscan_api_key);
+        self
+    }
+
     /// Builds the DisassemblerArgs from the builder
     ///
     /// # Returns
@@ -132,6 +232,11 @@ impl DisassemblerArgsBuilder {
                 .ok_or_else(|| eyre::eyre!("decimal_counter is required"))?,
             name: self.name.clone().ok_or_else(|| eyre::eyre!("name is required"))?,
             output: self.output.clone().ok_or_else(|| eyre::eyre!("output is required"))?,
+            hardfork: self.hardfork.ok_or_else(|| eyre::eyre!("hardfork is required"))?,
+            etherscan_api_key: self
+                .etherscan_api_key
+                .clone()
+                .ok_or_else(|| eyre::eyre!("etherscan_api_key is required"))?,
         })
     }
 }

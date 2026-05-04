@@ -1,8 +1,10 @@
+use alloy::primitives::Address;
 use clap::Parser;
 use derive_builder::Builder;
 use eyre::Result;
 use heimdall_common::ether::bytecode::get_bytecode_from_target;
 use heimdall_config::parse_url_arg;
+use heimdall_vm::core::hardfork::HardFork;
 
 #[derive(Debug, Clone, Parser, Builder)]
 #[clap(
@@ -60,13 +62,23 @@ pub struct DecompilerArgs {
     #[clap(long, short)]
     pub llm_postprocess: bool,
 
-    /// Your OpenAI API key, used for explaining calldata.
+    /// Your OpenRouter API key, used for LLM post-processing.
     #[clap(long, default_value = "", hide_default_value = true)]
-    pub openai_api_key: String,
+    pub openrouter_api_key: String,
+
+    /// The model to use for LLM post-processing (e.g., "openai/gpt-4o-mini",
+    /// "anthropic/claude-3-haiku").
+    #[clap(long, short = 'm', default_value = "", hide_default_value = true)]
+    pub model: String,
 
     /// Your Etherscan API key, used for fetching creation bytecode of self-destructed contracts.
     #[clap(long, default_value = "", hide_default_value = true)]
     pub etherscan_api_key: String,
+
+    /// The hardfork to use for opcode recognition. Opcodes introduced after this hardfork
+    /// will be treated as unknown. Defaults to 'latest'.
+    #[clap(long, short = 'f', default_value = "latest")]
+    pub hardfork: HardFork,
 }
 
 impl DecompilerArgs {
@@ -82,6 +94,54 @@ impl DecompilerArgs {
     /// The raw bytecode as a vector of bytes
     pub async fn get_bytecode(&self) -> Result<Vec<u8>> {
         get_bytecode_from_target(&self.target, &self.rpc_url, &self.etherscan_api_key).await
+    }
+
+    /// Gets the hardfork to use for decompilation.
+    ///
+    /// If `hardfork` is set to `Auto`, attempts to detect the hardfork based on the
+    /// contract's creation block. If detection fails, falls back to `Latest`.
+    pub async fn get_hardfork(&self) -> HardFork {
+        if self.hardfork != HardFork::Auto {
+            return self.hardfork;
+        }
+
+        match self.detect_hardfork_from_creation_block().await {
+            Some(fork) => fork,
+            None => HardFork::Latest,
+        }
+    }
+
+    /// Attempts to detect the hardfork based on the contract's creation block.
+    async fn detect_hardfork_from_creation_block(&self) -> Option<HardFork> {
+        if self.rpc_url.is_empty() {
+            return None;
+        }
+
+        let address: Address = self.target.parse().ok()?;
+        let chain_id = heimdall_common::ether::rpc::chain_id(&self.rpc_url).await.ok()?;
+        let creation_block = self.get_creation_block(address, chain_id).await?;
+
+        Some(HardFork::from_chain(chain_id, creation_block, None))
+    }
+
+    /// Gets the creation block for a contract address.
+    async fn get_creation_block(&self, address: Address, chain_id: u64) -> Option<u64> {
+        if !self.etherscan_api_key.is_empty() &&
+            heimdall_common::ether::etherscan::is_supported_chain(chain_id)
+        {
+            if let Ok(block) = heimdall_common::ether::etherscan::get_contract_creation_block(
+                address,
+                &self.rpc_url,
+                chain_id,
+                &self.etherscan_api_key,
+            )
+            .await
+            {
+                return Some(block);
+            }
+        }
+
+        heimdall_common::ether::rpc::get_contract_creation_block(address, &self.rpc_url).await.ok()
     }
 }
 
@@ -100,8 +160,10 @@ impl DecompilerArgsBuilder {
             timeout: Some(10000),
             abi: Some(None),
             llm_postprocess: Some(false),
-            openai_api_key: Some(String::new()),
+            openrouter_api_key: Some(String::new()),
+            model: Some(String::new()),
             etherscan_api_key: Some(String::new()),
+            hardfork: Some(HardFork::Latest),
         }
     }
 }

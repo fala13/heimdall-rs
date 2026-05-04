@@ -3,7 +3,7 @@ use std::time::Instant;
 use crate::{error::Error, interfaces::DisassemblerArgs};
 use eyre::eyre;
 use heimdall_common::utils::strings::encode_hex;
-use heimdall_vm::core::opcodes::opcode_name;
+use heimdall_vm::core::opcodes::OpCodeInfo;
 use tracing::{debug, info};
 
 /// Disassembles EVM bytecode into readable assembly instructions
@@ -24,6 +24,11 @@ pub async fn disassemble(args: DisassemblerArgs) -> Result<String, Error> {
     let start_time = Instant::now();
     let mut program_counter = 0;
     let mut asm = String::new();
+
+    // Resolve hardfork (handles Auto detection if needed)
+    let start_hardfork_resolve = Instant::now();
+    let hardfork = args.get_hardfork().await;
+    debug!("resolved hardfork: {} (took {:?})", hardfork, start_hardfork_resolve.elapsed());
 
     // get the bytecode from the target
     let start_fetch_time = Instant::now();
@@ -51,12 +56,18 @@ pub async fn disassemble(args: DisassemblerArgs) -> Result<String, Error> {
             byte_count_to_push_offset += byte_count_to_push as usize;
         }
 
+        // Get the opcode name, respecting hardfork activation
+        let opcode_name = match OpCodeInfo::for_fork(opcode, hardfork) {
+            Some(info) => info.name(),
+            None => "unknown",
+        };
+
         let offset = program_counter;
         asm.push_str(
             format!(
                 "{} {} {}\n",
                 if args.decimal_counter { offset.to_string() } else { format!("{offset:06x}") },
-                opcode_name(opcode),
+                opcode_name,
                 pushed_bytes
             )
             .as_str(),

@@ -114,9 +114,9 @@ pub async fn decompile_impl(mut args: DecompilerArgs, address: &str) -> Result<D
             "arguments '--include-sol' and '--include-yul' are mutually exclusive.".to_string(),
         )));
     }
-    if args.llm_postprocess && args.openai_api_key.is_empty() {
+    if args.llm_postprocess && args.openrouter_api_key.is_empty() {
         return Err(Error::Eyre(eyre!(
-                "llm postprocessing requires an openai API key. please provide one using the '--openai-api-key' flag."
+                "llm postprocessing requires an OpenRouter API key. please provide one using the '--openrouter-api-key' flag."
             )));
     }
     if !args.include_solidity && args.llm_postprocess {
@@ -132,6 +132,11 @@ pub async fn decompile_impl(mut args: DecompilerArgs, address: &str) -> Result<D
         cache_signatures_from_abi(abi_path.into())
             .map_err(|e| Error::Eyre(eyre!("caching signatures from ABI failed: {}", e)))?;
     }
+
+    // Resolve hardfork (handles Auto detection if needed)
+    let start_hardfork_resolve = Instant::now();
+    let hardfork = args.get_hardfork().await;
+    debug!("resolved hardfork: {} (took {:?})", hardfork, start_hardfork_resolve.elapsed());
 
     // get the bytecode from the target
     let start_fetch_time = Instant::now();
@@ -175,12 +180,14 @@ pub async fn decompile_impl(mut args: DecompilerArgs, address: &str) -> Result<D
         Address::default(),
         0,
         u128::MAX,
-    );
+    )
+    .with_hardfork(hardfork);
 
     // disassemble the contract's bytecode
     let assembly = disassemble(
         DisassemblerArgsBuilder::new()
             .target(encode_hex(&contract_bytecode))
+            .hardfork(hardfork)
             .build()
             .expect("impossible case: failed to build disassembly arguments"),
     )
@@ -403,7 +410,8 @@ pub async fn decompile_impl(mut args: DecompilerArgs, address: &str) -> Result<D
         &all_resolved_events,
         &storage_variables,
         args.llm_postprocess,
-        args.openai_api_key,
+        args.openrouter_api_key,
+        args.model,
     )
     .await?;
 

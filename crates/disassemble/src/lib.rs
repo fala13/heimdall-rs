@@ -16,4 +16,5 @@ mod interfaces;
 // re-export the public interface
 pub use core::disassemble;
 pub use error::Error;
+pub use heimdall_vm::core::hardfork::HardFork;
 pub use interfaces::{DisassemblerArgs, DisassemblerArgsBuilder};
