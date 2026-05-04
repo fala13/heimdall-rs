@@ -378,7 +378,7 @@ impl ResolveSelector for ResolvedFunction {
         else
         {
             // tracing::warn!("signature not found in SIG_MAP: {}, map length: {}", &selector, SIG_MAP.len());
-            warn!("signature not found in SIG_MAP: {}, map length: {}", &selector, SIG_MAP.len());
+            // warn!("signature not found in SIG_MAP: {}, map length: {}", &selector, SIG_MAP.len());
             return Ok(None);
         }
             // // get function possibilities from openchain

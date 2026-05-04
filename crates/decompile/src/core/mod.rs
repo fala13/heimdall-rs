@@ -285,6 +285,7 @@ pub async fn decompile_impl(mut args: DecompilerArgs, address: &str) -> Result<D
 
     debug!("analyzing symbolic execution results took {:?}", start_analysis_time.elapsed());
     info!("analyzed {} symbolic execution traces", analyzed_functions.len());
+    // info!("analyzed_functions: {:?}", analyzed_functions);
 
     // resolve event and error selectors
     if !args.skip_resolving && !EVIL {
