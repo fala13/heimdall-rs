@@ -5,8 +5,6 @@
 //! This module enables the translation of raw bytecode into meaningful operations,
 //! which is a critical step for understanding and analyzing smart contracts.
 
-#![recursion_limit = "256"]
-
 /// Error types for the disassembler module
 pub mod error;
 

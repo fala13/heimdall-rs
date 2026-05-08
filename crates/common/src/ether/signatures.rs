@@ -20,6 +20,7 @@ use serde::{
     ser::{SerializeMap, Serializer},
     Deserialize, Serialize,
 };
+#[allow(unused_imports)]
 use tracing::{debug, trace, warn};
 
 use super::types::DynSolValueExt;

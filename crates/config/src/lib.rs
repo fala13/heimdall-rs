@@ -36,18 +36,23 @@ pub struct ConfigArgs {
 #[derive(Deserialize, Serialize, Debug)]
 pub struct Configuration {
     /// The URL for the Ethereum RPC endpoint
+    #[serde(default)]
     pub rpc_url: String,
 
     /// The URL for a local Ethereum RPC endpoint
+    #[serde(default)]
     pub local_rpc_url: String,
 
     /// The API key for Etherscan services
+    #[serde(default)]
     pub etherscan_api_key: String,
 
     /// The API key for Transpose services
+    #[serde(default)]
     pub transpose_api_key: String,
 
     /// The API key for OpenRouter services
+    #[serde(default)]
     pub openrouter_api_key: String,
 
     /// The default model to use for OpenRouter LLM calls (e.g., "openai/gpt-4o-mini")
