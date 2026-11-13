@@ -178,56 +178,45 @@ pub fn find_cast(line: &str) -> Result<(Range<usize>, DynSolType)> {
 }
 
 /// Given a string of bytes, determine if it is left or right padded.
+///
+/// Two scans over `bytes`, with no index buffers. A word with no nulls, or with
+/// nulls that touch neither end, is [`Padding::None`].
 pub fn get_padding(bytes: &[u8]) -> Padding {
     let size = bytes.len();
+    if size == 0 {
+        // there are no null bytes
+        return Padding::None;
+    }
 
-    // get indices of null bytes in the decoded bytes
-    let null_byte_indices = bytes
-        .iter()
-        .enumerate()
-        .filter(|(_, byte)| **byte == 0)
-        .map(|(index, _)| index)
-        .collect::<Vec<usize>>();
+    let first_is_null = bytes[0] == 0;
+    let last_is_null = bytes[size - 1] == 0;
 
-    // we can avoid doing a full check if any of the following are true:
     // there are no null bytes OR
     // neither first nor last byte is a null byte, it is not padded
-    if null_byte_indices.is_empty() ||
-        null_byte_indices[0] != 0 && null_byte_indices[null_byte_indices.len() - 1] != size - 1
-    {
+    if !first_is_null && !last_is_null {
         return Padding::None;
     }
 
     // the first byte is a null byte AND the last byte is not a null byte, it is left padded
-    if null_byte_indices[0] == 0 && null_byte_indices[null_byte_indices.len() - 1] != size - 1 {
+    if first_is_null && !last_is_null {
         return Padding::Left;
     }
 
     // the first byte is not a null byte AND the last byte is a null byte, it is right padded
-    if null_byte_indices[0] != 0 && null_byte_indices[null_byte_indices.len() - 1] == size - 1 {
+    if !first_is_null && last_is_null {
         return Padding::Right;
     }
 
-    // get non-null byte indices
-    let non_null_byte_indices = bytes
-        .iter()
-        .enumerate()
-        .filter(|(_, byte)| **byte != 0)
-        .map(|(index, _)| index)
-        .collect::<Vec<usize>>();
-
-    if non_null_byte_indices.is_empty() {
+    // both ends are null. count leading and trailing nulls with two scans.
+    let Some(first_non_null) = bytes.iter().position(|byte| *byte != 0) else {
         return Padding::None;
-    }
+    };
+    let last_non_null = bytes.iter().rposition(|byte| *byte != 0).expect("a non-null byte exists");
 
     // check if the there are more null-bytes before the first non-null byte than after the last
     // non-null byte
-    let left_hand_padding =
-        null_byte_indices.iter().filter(|index| **index < non_null_byte_indices[0]).count();
-    let right_hand_padding = null_byte_indices
-        .iter()
-        .filter(|index| **index > non_null_byte_indices[non_null_byte_indices.len() - 1])
-        .count();
+    let left_hand_padding = first_non_null;
+    let right_hand_padding = size - last_non_null - 1;
 
     match left_hand_padding.cmp(&right_hand_padding) {
         std::cmp::Ordering::Greater => Padding::Left,
@@ -236,7 +225,9 @@ pub fn get_padding(bytes: &[u8]) -> Padding {
     }
 }
 
-/// Given a string of bytes, get the max padding size for the data
+/// Given a string of bytes, get the max padding size for the data.
+///
+/// Classifies with [`get_padding`], then scans the padded side. No index buffers.
 pub fn get_padding_size(bytes: &[u8]) -> usize {
     match get_padding(bytes) {
         Padding::Left => {

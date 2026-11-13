@@ -15,7 +15,7 @@ use crate::{
     },
 };
 use eyre::{OptionExt, Result};
-use heimdall_cache::{store_cache, with_cache};
+use heimdall_cache::{read_cache, store_cache, with_cache};
 use serde::{
     ser::{SerializeMap, Serializer},
     Deserialize, Serialize,
@@ -331,22 +331,37 @@ impl ResolveSelector for ResolvedLog {
     }
 }
 
-#[async_trait]
-impl ResolveSelector for ResolvedFunction {
-    async fn resolve(selector: &str) -> Result<Option<Vec<Self>>> {
-        with_cache(&format!("selector.{selector}"), || async {
-            // normalize selector
-            let selector = match selector.strip_prefix("0x") {
-                Some(selector) => selector,
-                None => selector,
-            };
+/// Resolve a function selector from the local signature map.
+///
+/// The result is cached on disk. `decoded_inputs` is not part of the cached value.
+pub fn resolve_function(selector: &str) -> Result<Option<Vec<ResolvedFunction>>> {
+    let key = format!("selector.{selector}");
+    match read_cache::<Option<Vec<ResolvedFunction>>>(&key) {
+        Ok(Some(cached)) => {
+            tracing::debug!("cache hit for key: '{key}'");
+            return Ok(cached);
+        }
+        _ => tracing::debug!("cache miss for key: '{key}'"),
+    }
 
-            // tracing::info!("resolving function selector {}", &selector);
-            trace!("resolving function selector {}", &selector);
+    let value = lookup_function_signatures(selector)?;
+    store_cache(&key, &value, None)?;
+    Ok(value)
+}
 
-        let mut signature_list: Vec<ResolvedFunction> = Vec::new();
-        // get signatures from local map
-        if let Some(sigs) = SIG_MAP.get(selector) {
+fn lookup_function_signatures(selector: &str) -> Result<Option<Vec<ResolvedFunction>>> {
+    // normalize selector
+    let selector = match selector.strip_prefix("0x") {
+        Some(selector) => selector,
+        None => selector,
+    };
+
+    // tracing::info!("resolving function selector {}", &selector);
+    trace!("resolving function selector {}", &selector);
+
+    let mut signature_list: Vec<ResolvedFunction> = Vec::new();
+    // get signatures from local map
+    if let Some(sigs) = SIG_MAP.get(selector) {
             // tracing::info!("sigs: {:?}", sigs);
             for text_signature in sigs {
                 // tracing::info!("text_signature: {:?}", text_signature);
@@ -431,12 +446,16 @@ impl ResolveSelector for ResolvedFunction {
             //         decoded_inputs: None,
             //     });
 
-            Ok(match signature_list.len() {
-                0 => None,
-                _ => Some(signature_list),
-            })
-        })
-        .await
+    Ok(match signature_list.len() {
+        0 => None,
+        _ => Some(signature_list),
+    })
+}
+
+#[async_trait]
+impl ResolveSelector for ResolvedFunction {
+    async fn resolve(selector: &str) -> Result<Option<Vec<Self>>> {
+        resolve_function(selector)
     }
 }
 

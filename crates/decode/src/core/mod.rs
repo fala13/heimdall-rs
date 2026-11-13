@@ -7,11 +7,11 @@ use eyre::eyre;
 use heimdall_common::{
     ether::{
         signatures::{
-            cache_signatures_from_abi, score_signature, ResolveSelector, ResolvedFunction,
+            cache_signatures_from_abi, resolve_function, score_signature, ResolvedFunction,
         },
         types::parse_function_parameters,
     },
-    utils::strings::encode_hex,
+    utils::strings::{decode_hex, encode_hex},
 };
 use heimdall_vm::core::types::{get_padding, get_potential_types_for_word, to_type, Padding};
 use tracing::{debug, info, trace, warn};
@@ -41,7 +41,35 @@ use crate::{
 /// A DecodeResult containing the resolved function and its decoded parameters
 pub async fn decode(mut args: DecodeArgs) -> Result<DecodeResult, Error> {
     let start_time = Instant::now();
+    prepare_decode(&mut args)?;
 
+    // get the bytecode from the target
+    let start_fetch_time = Instant::now();
+    let calldata = args
+        .get_calldata()
+        .await
+        .map_err(|e| Error::FetchError(format!("fetching target calldata failed: {e}")))?;
+    debug!("fetching target calldata took {:?}", start_fetch_time.elapsed());
+
+    decode_calldata(calldata, args, start_time)
+}
+
+/// Decode raw calldata without fetching a transaction.
+///
+/// `args.target` is calldata hex, with or without a `0x` prefix. A target that
+/// is not hex returns the same fetch error as [`decode`]. This path does not
+/// contact an RPC node.
+pub fn decode_simple(mut args: DecodeArgs) -> Result<DecodeResult, Error> {
+    let start_time = Instant::now();
+    prepare_decode(&mut args)?;
+
+    let calldata = decode_hex(&args.target)
+        .map_err(|e| Error::FetchError(format!("fetching target calldata failed: {e}")))?;
+
+    decode_calldata(calldata, args, start_time)
+}
+
+fn prepare_decode(args: &mut DecodeArgs) -> Result<(), Error> {
     // check if we require an OpenRouter API key
     if args.explain && args.openrouter_api_key.is_empty() {
         return Err(Error::Eyre(
@@ -55,14 +83,15 @@ pub async fn decode(mut args: DecodeArgs) -> Result<DecodeResult, Error> {
             .map_err(|e| Error::Eyre(eyre!("caching signatures from ABI failed: {}", e)))?;
     }
 
-    // get the bytecode from the target
-    let start_fetch_time = Instant::now();
-    let mut calldata = args
-        .get_calldata()
-        .await
-        .map_err(|e| Error::FetchError(format!("fetching target calldata failed: {e}")))?;
-    debug!("fetching target calldata took {:?}", start_fetch_time.elapsed());
+    Ok(())
+}
 
+/// Selector resolve, the raw walk, and multicall. Both entries share this body.
+pub(crate) fn decode_calldata(
+    mut calldata: Vec<u8>,
+    mut args: DecodeArgs,
+    start_time: Instant,
+) -> Result<DecodeResult, Error> {
     if calldata.is_empty() {
         return Err(Error::Eyre(eyre!("calldata is empty. is this a value transfer?")));
     }
@@ -107,7 +136,7 @@ pub async fn decode(mut args: DecodeArgs) -> Result<DecodeResult, Error> {
     // get the function signature possibilities
     let start_resolve_time = Instant::now();
     let potential_matches = if !args.skip_resolving {
-        match ResolvedFunction::resolve(&function_selector).await {
+        match resolve_function(&function_selector) {
             Ok(Some(signatures)) => signatures,
             _ => Vec::new(),
         }
@@ -188,7 +217,12 @@ pub async fn decode(mut args: DecodeArgs) -> Result<DecodeResult, Error> {
             // while calldata_words is not empty, iterate over itcar
             let mut i = 0;
             let mut covered_words = HashSet::new();
-            while covered_words.len() != calldata_words.len() {
+            while i < calldata_words.len() && covered_words.len() != calldata_words.len() {
+                // Words already consumed by a dynamic type are not parameters of their own.
+                if covered_words.contains(&i) {
+                    i += 1;
+                    continue;
+                }
                 let word = calldata_words[i].to_owned();
 
                 // check if the first word is abiencoded
@@ -254,7 +288,7 @@ pub async fn decode(mut args: DecodeArgs) -> Result<DecodeResult, Error> {
         for input in decoded_inputs {
             if is_multicall_pattern(input) {
                 debug!("Detected multicall pattern");
-                match decode_multicall(input, &args).await {
+                match decode_multicall(input, &args) {
                     Ok(results) => {
                         info!("Successfully decoded {} multicall items", results.len());
                         multicall_decoded = Some(results);
@@ -283,4 +317,101 @@ pub async fn decode(mut args: DecodeArgs) -> Result<DecodeResult, Error> {
     // }
 
     Ok(DecodeResult { decoded: selected_match, multicall_results })
+}
+
+#[cfg(test)]
+mod tests {
+    use std::future::Future;
+    use std::task::{Context, Poll, Waker};
+    use std::time::{Duration, Instant};
+
+    use super::{decode, decode_simple};
+    use crate::interfaces::{DecodeArgs, DecodeResult};
+
+    const REPEATED_OFFSET_WORDS: usize = 48;
+    const NESTING_CAP: usize = 4;
+
+    /// `decode` is async, but this fixture never waits on I/O.
+    fn block_on<F: Future>(future: F) -> F::Output {
+        let waker = Waker::noop();
+        let mut cx = Context::from_waker(&waker);
+        let mut future = std::pin::pin!(future);
+        // Hex calldata is ready without I/O. A few polls cover the async state machine.
+        for _ in 0..8 {
+            match future.as_mut().poll(&mut cx) {
+                Poll::Ready(value) => return value,
+                Poll::Pending => {}
+            }
+        }
+        panic!("decode fixture waited on I/O");
+    }
+
+    /// Build a 4-byte selector plus `REPEATED_OFFSET_WORDS` copies of one 32-byte word.
+    fn repeated_offset_calldata(last_byte: u8) -> String {
+        let mut calldata = String::with_capacity(2 + 8 + REPEATED_OFFSET_WORDS * 64);
+        calldata.push_str("0xdeadbeef");
+        let word = format!("{:064x}", last_byte);
+        for _ in 0..REPEATED_OFFSET_WORDS {
+            calldata.push_str(&word);
+        }
+        calldata
+    }
+
+    fn repeated_offset_args(last_byte: u8) -> DecodeArgs {
+        DecodeArgs {
+            target: repeated_offset_calldata(last_byte),
+            rpc_url: String::new(),
+            openrouter_api_key: String::new(),
+            model: String::new(),
+            explain: false,
+            default: true,
+            constructor: false,
+            truncate_calldata: false,
+            skip_resolving: true,
+            raw: true,
+            abi: None,
+            output: String::from("print"),
+        }
+    }
+
+    /// A word of `0x20` is an in-range offset and a length of 32. Each nested slice
+    /// starts two words later and, at ~48 words, that length still fits for several
+    /// levels. Uncapped, every level branches by 32, about `32^(n/2)` calls, and
+    /// does not return. `0x40` is the same repeated-offset shape (length 64).
+    /// Arrays wider than 8 elements are not walked, and nesting stops at 4, so
+    /// this returns. The time bound fails if those limits are removed.
+    #[test]
+    fn repeated_offsets_finish_with_capped_nesting() {
+        for last_byte in [0x20_u8, 0x40] {
+            let started = Instant::now();
+            let decoded = block_on(decode(repeated_offset_args(last_byte)))
+                .unwrap_or_else(|err| panic!("word {last_byte:#x} decode failed: {err}"));
+            assert_repeated_offset_bound(last_byte, &decoded, started.elapsed());
+        }
+    }
+
+    /// The same fixture through the synchronous entry, with no runtime poll.
+    #[test]
+    fn repeated_offsets_finish_with_decode_simple() {
+        for last_byte in [0x20_u8, 0x40] {
+            let started = Instant::now();
+            let decoded = decode_simple(repeated_offset_args(last_byte))
+                .unwrap_or_else(|err| panic!("word {last_byte:#x} decode_simple failed: {err}"));
+            assert_repeated_offset_bound(last_byte, &decoded, started.elapsed());
+        }
+    }
+
+    fn assert_repeated_offset_bound(last_byte: u8, decoded: &DecodeResult, elapsed: Duration) {
+        assert!(
+            elapsed < Duration::from_millis(100),
+            "word {last_byte:#x} took {elapsed:?}; uncapped, a repeated offset does not return"
+        );
+        let nesting =
+            decoded.decoded.inputs.iter().map(|ty| ty.matches("[]").count()).max().unwrap_or(0);
+        assert!(
+            nesting <= NESTING_CAP,
+            "word {last_byte:#x} inferred {} with {nesting} array levels",
+            decoded.decoded.inputs.join(", ")
+        );
+    }
 }

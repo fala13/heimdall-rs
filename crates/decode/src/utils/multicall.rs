@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 use alloy_dyn_abi::DynSolValue;
 use eyre::eyre;
 use heimdall_common::utils::{
@@ -7,7 +9,7 @@ use heimdall_common::utils::{
 use tracing::{debug, trace};
 
 use crate::{
-    core::decode,
+    core::decode_calldata,
     error::Error,
     interfaces::{DecodeArgs, DecodeResult},
 };
@@ -45,7 +47,7 @@ pub(crate) fn is_multicall_pattern(value: &DynSolValue) -> bool {
 }
 
 /// Decodes multicall data recursively
-pub(crate) async fn decode_multicall(
+pub(crate) fn decode_multicall(
     value: &DynSolValue,
     args: &DecodeArgs,
 ) -> Result<Vec<MulticallDecoded>, Error> {
@@ -55,7 +57,7 @@ pub(crate) async fn decode_multicall(
 
             for (index, item) in items.iter().enumerate() {
                 if let DynSolValue::Tuple(tuple_items) = item {
-                    let decoded = decode_multicall_item(tuple_items, args, index).await?;
+                    let decoded = decode_multicall_item(tuple_items, args, index)?;
                     results.push(decoded);
                 }
             }
@@ -76,7 +78,7 @@ pub struct MulticallDecoded {
     pub decoded: Option<DecodeResult>,
 }
 
-async fn decode_multicall_item(
+fn decode_multicall_item(
     tuple_items: &[DynSolValue],
     args: &DecodeArgs,
     index: usize,
@@ -125,7 +127,7 @@ async fn decode_multicall_item(
         nested_args.target = encode_hex(&calldata);
         nested_args.raw = true;
 
-        match Box::pin(decode(nested_args)).await {
+        match decode_calldata(calldata.clone(), nested_args, Instant::now()) {
             Ok(result) => {
                 debug!("Successfully decoded multicall item {}", index);
                 Some(result)
